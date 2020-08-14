@@ -20,6 +20,8 @@ import binascii
 import copy
 import time
 import socket
+import estreamer.adapters.pretty
+import estreamer.crossprocesslogging as logging
 import estreamer
 import estreamer.adapters.kvpair
 import estreamer.definitions as definitions
@@ -142,7 +144,7 @@ MAPPING = {
             'rt': lambda rec: rec['eventSecond'] * 1000,
             'start': lambda rec: rec['packetSecond'] * 1000,
             'deviceExternalId': lambda rec: rec['deviceId'],
-            'cs1': lambda rec: __packetData( rec['packetData'] )
+            'zz_payload': lambda rec: __packetData( rec['packetData'] )
         },
 
         'fields': {
@@ -207,8 +209,8 @@ MAPPING = {
             'lastPacketTimestamp': '', # Used to generate end
             'initiatorTransmittedPackets': '',
             'responderTransmittedPackets': '',
-            'initiatorTransmittedBytes': 'bytesOut',
-            'responderTransmittedBytes': 'bytesIn',
+            'initiatorTransmittedBytes': 'out',
+            'responderTransmittedBytes': 'in',
             'initiatorPacketsDropped': '',
             'responderPacketsDropped': '',
             'initiatorBytesDropped': '',
@@ -303,6 +305,49 @@ MAPPING = {
         },
     },
 
+    definitions.RECORD_INTRUSION_EXTRA_DATA: {
+        'sig_id': lambda rec: 'INTRUSION_EXTRA:110:1',
+
+        'name': lambda rec: 'INTRUSION EXTRA DATA',
+
+        'severity': lambda rec: 7,
+
+        'constants': {
+           #'cs1Label': 'eventId',
+           'cn3Label': 'type'
+        },
+
+        'lambdas': {
+            'rt': lambda rec: rec['eventSecond'] * 1000,
+            #'start': lambda rec: rec['packetSecond'] * 1000,
+            'deviceExternalId': lambda rec: rec['deviceId']
+#            'cs1': lambda rec: __packetData( rec['eventId'] )
+        },
+
+       'fields': {
+            'deviceId': 'dvchost',
+          #  'eventSecond': 'eventSecond',
+          #  'eventId': 'eventId',
+            'eventId': 'externalId',
+            'blob.blockLength': '',
+            'blob.blockType': '',
+            'checksum': '',
+            'recordLength': '',
+            'archiveTimestamp':'',
+            'blob.data': 'request',
+            'blockLength': '',
+            'blockType': '',
+            'type': 'cn3',
+            'blob': 'blob'
+         
+        },
+
+        'viewdata': {
+            View.SENSOR: 'dvchost'
+        },
+
+    },
+
     # 112
     definitions.RECORD_CORRELATION_EVENT: {
         'sig_id': lambda rec: 'PV:112:{0}:{1}'.format(
@@ -331,12 +376,14 @@ MAPPING = {
             'dst': lambda rec: __ipv4( rec['destinationIpv6Address'] ),
             'c6a2': lambda rec: __ipv6( rec['sourceIpv6Address'] ),
             'c6a3': lambda rec: __ipv6( rec['destinationIpv6Address'] ),
+            'deviceExternalId': lambda rec: rec['deviceId'],
         },
 
         'fields': {
             'deviceId': 'deviceExternalId',
             'correlationEventSecond': '', # Used to generate rt
             'eventId': 'externalId',
+            'deviceId': 'dvchost',
             'policyId': 'cs1',
             'ruleId': 'cs2',
             'priority': '', # Used to generate severity
@@ -416,7 +463,7 @@ MAPPING = {
             'cs2Label': 'virusName',
             'cs3Label': 'disposition',
             'cs4Label': 'speroDisposition',
-            'cs5Label': 'eventDescription',
+            #'cs5Label': 'eventDescription',
         },
 
         'lambdas': {
@@ -450,6 +497,7 @@ MAPPING = {
             'malwareEventTimestamp': '', # Used to generate rt
             'eventTypeId': 'outcome',
             'eventSubtypeId': '',
+            'eventId': 'externalId',
             'detectorId': '',
             'detectionName.data': 'cs2',
             'user.data': 'suser',
@@ -461,7 +509,7 @@ MAPPING = {
             'fileTimestamp': 'fileCreateTime',
             'parentFileName.data': 'sproc',
             'parentShaHash': '',
-            'eventDescription.data': 'cs5',
+            'eventDescription.data': 'msg',
             'deviceId': 'dvchost',
             'connectionInstance': 'dvcpid',
             'connectionCounter': '',
@@ -510,7 +558,7 @@ MAPPING = {
             rec['impact'] ),
 
         'constants': {
-            'cs1Label': 'fwPolicy',
+            'cs1Label': 'payload',
             'cs2Label': 'fwRule',
             'cs3Label': 'ingressZone',
             'cs4Label': 'egressZone',
@@ -541,7 +589,7 @@ MAPPING = {
             View.USER: 'suser',
             View.CLIENT_APP: 'requestClientApplication',
             View.APP_PROTO: 'app',
-            View.FW_POLICY: 'cs1',
+            View.FW_POLICY: '',
             View.FW_RULE: 'cs2',
             View.IFACE_INGRESS: 'deviceInboundInterface',
             View.IFACE_EGRESS: 'deviceOutboundInterface',
@@ -635,6 +683,7 @@ MAPPING = {
 
         'fields': {
             'deviceId': 'dvchost',
+            'eventId': 'externalId',
             'connectionInstance': 'dvcpid',
             'connectionCounter': '',
             'connectionTimestamp': '', # Used to generate start
@@ -692,10 +741,23 @@ class Cef( object ):
         self.record = estreamer.common.Flatdict( source, True )
         self.output = None
         self.mapping = None
+        self.logger = logging.getLogger( self.__class__.__name__ )
+
 
         if 'recordType' in self.record:
             if self.record['recordType'] in MAPPING:
                 self.mapping = MAPPING[ self.record['recordType'] ]
+                if self.record['recordType'] == 110 :
+                    self.logger.info("XFF data")
+                    for key in self.record:
+                        self.logger.info(key) # This will return me the key
+ #                       for items in self.record.store[key]:
+#                            self.logger.info("    %s" % items) # This will return me the subkey
+
+ #                           for values in self.record.store[key][items]:
+  #                              self.logger.info("        %s" % values) #this return the values for each subkey)
+#                    self.logger.info(estreamer.common.display(self.record))
+
                 self.output = {}
 
 
@@ -762,6 +824,10 @@ class Cef( object ):
         # $hostname =~ s/\.+$//;
         hostname = socket.gethostname()
 
+        #logger
+        self.logger = logging.getLogger( self.__class__.__name__ )
+
+
         # http://search.cpan.org/~dexter/POSIX-strftime-GNU-0.02/lib/POSIX/strftime/GNU.pm
         # # Get syslog-style timestamp: MAR  1 16:23:11
         # my $datetime = strftime('%b %e %T', localtime(time()));
@@ -789,7 +855,7 @@ class Cef( object ):
             CEF_DEV_PRODUCT,
             CEF_DEV_VERSION,
             sigId,
-            name,
+            name.replace('|','\|'),
             severity,
             data,
             SYSLOG_NUMERIC,
