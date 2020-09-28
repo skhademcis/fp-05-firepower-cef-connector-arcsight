@@ -29,11 +29,11 @@ the binary content and outputs events in various formats to support other SIEMs.
 This is a beta version of eNcore. Before the General Availability release this will be
 updated with details of paying for and receiving support.
 
+Full Guide
+https://www.cisco.com/c/en/us/td/docs/security/firepower/670/api/eStreamer_enCore/eStreamereNcoreSentinelOperationsGuide_409.html
+
 # Quick install
-* Download the release: eStreamer-eNcore-X.YY.tar.gz
 * Navigate to the directory you want to contain eStreamer eNcore
-* `tar -xf eStreamer-eNcore-X.YY.tar.gz`
-* `cd eStreamer-eNcore`
 * Run eNcore: `./encore.sh`
 * Run a connectivity test: `./encore.sh test` (and enter the pkcs12 password)
 * View the log output `tail -f estreamer.log`
